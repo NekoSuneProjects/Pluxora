@@ -6,6 +6,7 @@ const session = require('express-session');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { WebSocketServer } = require('ws');
+const { searchGithubPluginRepositories } = require('../utils/githubDiscovery');
 
 class DashboardServer {
   constructor({ client, configManager, pluginManager, commandManager, logger, rootDir = process.cwd() }) {
@@ -247,12 +248,55 @@ class DashboardServer {
       }
     });
 
+    api.get('/plugins/discover/github', async (req, res, next) => {
+      try {
+        const discoveryConfig = this.configManager.getCore('plugins.discovery.github', {});
+        if (discoveryConfig.enabled === false) {
+          return res.status(403).json({ error: 'GitHub plugin discovery is disabled.' });
+        }
+
+        const result = await searchGithubPluginRepositories({
+          topic: req.query.topic || discoveryConfig.topic,
+          query: req.query.query,
+          limit: req.query.limit,
+          defaultLimit: discoveryConfig.defaultLimit,
+          sort: req.query.sort || discoveryConfig.sort,
+          order: req.query.order || discoveryConfig.order
+        });
+
+        const installedPlugins = this.pluginManager.listPlugins();
+        const installedSources = new Set(installedPlugins.map((plugin) => plugin.source).filter(Boolean));
+        const installedIds = new Set(installedPlugins.map((plugin) => plugin.id));
+
+        res.json({
+          ...result,
+          repositories: result.repositories.map((repository) => ({
+            ...repository,
+            installed: installedSources.has(repository.cloneUrl) || installedIds.has(repository.pluginId) || installedIds.has(repository.name)
+          }))
+        });
+      } catch (error) {
+        next(error);
+      }
+    });
+
+    api.post('/plugins/check-updates', async (req, res, next) => {
+      try {
+        const updates = await this.pluginManager.checkAllPluginUpdates();
+        res.json({ updates, plugins: this.pluginManager.listPlugins() });
+      } catch (error) {
+        next(error);
+      }
+    });
+
     api.post('/plugins/:id/:action', async (req, res, next) => {
       try {
         const { id, action } = req.params;
         if (action === 'enable') await this.pluginManager.enablePlugin(id);
         else if (action === 'disable') await this.pluginManager.disablePlugin(id);
         else if (action === 'reload') await this.pluginManager.reloadPlugin(id);
+        else if (action === 'check-update') await this.pluginManager.checkPluginUpdate(id);
+        else if (action === 'update') await this.pluginManager.updatePlugin(id);
         else if (action === 'uninstall') await this.pluginManager.uninstallPlugin(id, { keepConfig: req.body.keepConfig === true });
         else return res.status(400).json({ error: `Unsupported action "${action}"` });
         res.json({ ok: true, plugins: this.pluginManager.listPlugins() });

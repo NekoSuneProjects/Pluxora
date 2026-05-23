@@ -23,6 +23,8 @@ These controls are not equivalent to a VM, container, or OS sandbox.
 - Keep `security.allowUntrustedPluginInstall` set to `false`
 - Keep `plugins.dependencyInstall.ignoreScripts` set to `true`
 - Restrict `security.allowedPluginHosts` to repositories you control
+- Treat GitHub discovery results as untrusted candidates until reviewed
+- Review plugin update diffs before updating production bots
 - Require code review before enabling new plugins
 - Run the bot under a dedicated OS user with minimal filesystem permissions
 - Store secrets only in environment variables or a secret manager
@@ -49,6 +51,14 @@ npm install --no-audit --no-fund --omit=dev --ignore-scripts
 ```
 
 Some media or native dependencies may require install scripts. Only disable `ignoreScripts` for plugins you trust.
+
+## GitHub Discovery
+
+The dashboard and `pluginsearch` command query GitHub repositories by topic. The default topic is `nekosunebot-package`.
+
+Discovery does not prove a repository is safe or compatible. Installation still clones and validates the plugin package shape, but it does not sandbox arbitrary JavaScript. Set `GITHUB_TOKEN` only if you need higher GitHub API rate limits, and use a token with the lowest practical permissions.
+
+Update checks read the remote GitHub repository metadata and `package.json`. An update can be flagged because the plugin version increased or because GitHub shows the repository was pushed after the currently installed source timestamp. This is useful for catching repositories that forgot to bump versions, but it also means maintainers should still review changes before applying updates.
 
 ## Fault Isolation
 

@@ -10,16 +10,41 @@ const PLUGIN_ID_PATTERN = /^[a-z0-9][a-z0-9-_]{1,63}$/;
 function getPluginManifest(pkg) {
   const manifest = pkg.modularDiscordBotPlugin || {};
   const id = manifest.id || pkg.name;
+  const repository = normalizeRepositoryUrl(manifest.repository || pkg.repository);
   return {
     id,
     name: manifest.name || pkg.displayName || pkg.name,
     version: manifest.version || pkg.version || '0.0.0',
     description: manifest.description || pkg.description || '',
+    author: manifest.author || normalizeAuthor(pkg.author),
+    homepage: manifest.homepage || pkg.homepage || repository,
+    repository,
+    githubUrl: manifest.githubUrl || (repository?.includes('github.com') ? repository : null),
+    keywords: manifest.keywords || pkg.keywords || [],
     entry: manifest.entry || pkg.main || 'index.js',
     requiresRestart: manifest.requiresRestart === true,
     permissions: manifest.permissions || [],
     defaultEnabled: manifest.defaultEnabled !== false
   };
+}
+
+function normalizeAuthor(author) {
+  if (!author) return null;
+  if (typeof author === 'string') return author;
+  if (author.name && author.url) return `${author.name} (${author.url})`;
+  return author.name || author.email || null;
+}
+
+function normalizeRepositoryUrl(repository) {
+  if (!repository) return null;
+  const raw = typeof repository === 'string' ? repository : repository.url;
+  if (!raw) return null;
+  return raw
+    .replace(/^git\+/, '')
+    .replace(/^git:\/\//, 'https://')
+    .replace(/^ssh:\/\/git@github\.com\//, 'https://github.com/')
+    .replace(/^git@github\.com:/, 'https://github.com/')
+    .replace(/\.git$/, '');
 }
 
 function assertSafePluginId(pluginId) {
@@ -136,6 +161,8 @@ async function installPluginFromSource(source, options) {
     allowRemoteInstall = true,
     allowUntrusted = false,
     maxArchiveBytes = 50 * 1024 * 1024,
+    overwrite = false,
+    expectedPluginId = null,
     logger
   } = options;
 
@@ -170,18 +197,23 @@ async function installPluginFromSource(source, options) {
 
     const pluginRoot = await findPluginRoot(sourceDirectory);
     const { manifest } = await validatePluginDirectory(pluginRoot);
+    if (expectedPluginId && manifest.id !== expectedPluginId) {
+      throw new Error(`Updated plugin id mismatch. Expected "${expectedPluginId}", got "${manifest.id}".`);
+    }
+
     const destination = path.join(pluginsDirectory, manifest.id);
 
-    if (await fs.pathExists(destination)) {
+    if (!overwrite && await fs.pathExists(destination)) {
       throw new Error(`Plugin "${manifest.id}" is already installed.`);
     }
 
     await fs.ensureDir(pluginsDirectory);
+    if (overwrite) await fs.remove(destination);
     await fs.copy(pluginRoot, destination, {
       filter: (src) => !src.includes(`${path.sep}.git${path.sep}`) && !src.endsWith(`${path.sep}.git`)
     });
 
-    return { manifest, destination };
+    return { manifest, destination, source };
   } finally {
     await fs.remove(tempRoot);
   }

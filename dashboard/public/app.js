@@ -1,6 +1,7 @@
 const state = {
   plugins: [],
   commands: [],
+  githubResults: [],
   logs: []
 };
 
@@ -13,6 +14,16 @@ const viewTitles = {
 };
 
 const $ = (selector) => document.querySelector(selector);
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  }[char]));
+}
 
 function toast(message) {
   const element = $('#toast');
@@ -50,11 +61,16 @@ function formatDuration(ms) {
   return `${hours}h ${minutes}m`;
 }
 
+function isGithubBacked(plugin) {
+  return plugin.sourceType === 'github' || Boolean(plugin.githubUrl);
+}
+
 function pluginBadge(plugin) {
   if (plugin.status === 'failed') return '<span class="badge error">failed</span>';
+  if (plugin.updateAvailable) return '<span class="badge warn">update</span>';
   if (plugin.loaded) return '<span class="badge ok">loaded</span>';
   if (!plugin.enabled) return '<span class="badge warn">disabled</span>';
-  return `<span class="badge">${plugin.status || 'installed'}</span>`;
+  return `<span class="badge">${escapeHtml(plugin.status || 'installed')}</span>`;
 }
 
 function renderPlugins() {
@@ -67,12 +83,23 @@ function renderPlugins() {
   select.innerHTML = '';
 
   for (const plugin of state.plugins) {
+    const versionText = plugin.latestVersion && plugin.latestVersion !== plugin.version
+      ? `${escapeHtml(plugin.version || '?')} -> ${escapeHtml(plugin.latestVersion)}`
+      : escapeHtml(plugin.version || '?');
+    const sourceLink = plugin.githubUrl
+      ? `<a href="${escapeHtml(plugin.githubUrl)}" target="_blank" rel="noreferrer">${escapeHtml(plugin.sourceRepository || plugin.githubUrl)}</a>`
+      : escapeHtml(plugin.source || 'local');
+    const authorText = plugin.author ? `Author: ${escapeHtml(plugin.author)}` : 'Author: unknown';
+    const updateText = plugin.latestCheckedAt
+      ? `Update: ${plugin.updateAvailable ? 'available' : 'current'} (${escapeHtml(plugin.updateReason || 'checked')})`
+      : 'Update: not checked';
+
     const compact = document.createElement('div');
     compact.className = 'plugin-row';
     compact.innerHTML = `
       <div>
-        <div class="plugin-title"><strong>${plugin.id}</strong>${pluginBadge(plugin)}</div>
-        <div class="plugin-meta">${plugin.description || plugin.version || ''}</div>
+        <div class="plugin-title"><strong>${escapeHtml(plugin.id)}</strong>${pluginBadge(plugin)}</div>
+        <div class="plugin-meta">v${versionText} - ${escapeHtml(plugin.description || '')}</div>
       </div>
     `;
     overview.appendChild(compact);
@@ -81,15 +108,20 @@ function renderPlugins() {
     row.className = 'plugin-row';
     row.innerHTML = `
       <div>
-        <div class="plugin-title"><strong>${plugin.name || plugin.id}</strong><span class="badge">${plugin.id}</span>${pluginBadge(plugin)}</div>
-        <div class="plugin-meta">${plugin.description || ''}</div>
-        ${plugin.lastError ? `<div class="plugin-meta level-error">${plugin.lastError}</div>` : ''}
+        <div class="plugin-title"><strong>${escapeHtml(plugin.name || plugin.id)}</strong><span class="badge">${escapeHtml(plugin.id)}</span>${pluginBadge(plugin)}</div>
+        <div class="plugin-meta">v${versionText} - ${escapeHtml(plugin.description || '')}</div>
+        <div class="plugin-meta">${authorText}</div>
+        <div class="plugin-meta">Source: ${sourceLink}</div>
+        <div class="plugin-meta">${updateText}</div>
+        ${plugin.lastError ? `<div class="plugin-meta level-error">${escapeHtml(plugin.lastError)}</div>` : ''}
       </div>
       <div class="plugin-actions">
-        <button class="button" data-action="${plugin.enabled ? 'disable' : 'enable'}" data-id="${plugin.id}">${plugin.enabled ? 'Disable' : 'Enable'}</button>
-        <button class="button" data-action="reload" data-id="${plugin.id}">Reload</button>
-        <button class="button" data-config="${plugin.id}">Config</button>
-        <button class="button danger" data-action="uninstall" data-id="${plugin.id}">Uninstall</button>
+        <button class="button" data-action="${plugin.enabled ? 'disable' : 'enable'}" data-id="${escapeHtml(plugin.id)}">${plugin.enabled ? 'Disable' : 'Enable'}</button>
+        <button class="button" data-action="reload" data-id="${escapeHtml(plugin.id)}">Reload</button>
+        <button class="button" data-action="check-update" data-id="${escapeHtml(plugin.id)}" ${isGithubBacked(plugin) ? '' : 'disabled'}>Check</button>
+        <button class="button ${plugin.updateAvailable ? 'primary' : ''}" data-action="update" data-id="${escapeHtml(plugin.id)}" ${isGithubBacked(plugin) ? '' : 'disabled'}>Update</button>
+        <button class="button" data-config="${escapeHtml(plugin.id)}">Config</button>
+        <button class="button danger" data-action="uninstall" data-id="${escapeHtml(plugin.id)}">Uninstall</button>
       </div>
     `;
     list.appendChild(row);
@@ -110,10 +142,63 @@ function renderCommands() {
     row.className = 'plugin-row';
     row.innerHTML = `
       <div>
-        <div class="plugin-title"><strong>${command.name}</strong><span class="badge">${command.pluginId}</span></div>
-        <div class="plugin-meta">${command.description || ''}</div>
+        <div class="plugin-title"><strong>${escapeHtml(command.name)}</strong><span class="badge">${escapeHtml(command.pluginId)}</span></div>
+        <div class="plugin-meta">${escapeHtml(command.description || '')}</div>
       </div>
       <div class="plugin-meta">${command.slash ? '/' : ''}${command.prefix ? ' prefix' : ''}</div>
+    `;
+    list.appendChild(row);
+  }
+}
+
+function renderGithubResults() {
+  const list = $('#githubResults');
+  const select = $('#githubResultSelect');
+  list.innerHTML = '';
+  select.innerHTML = '';
+
+  if (!state.githubResults.length) {
+    const empty = document.createElement('div');
+    empty.className = 'plugin-meta';
+    empty.textContent = 'No plugin repositories found yet.';
+    list.appendChild(empty);
+
+    const option = document.createElement('option');
+    option.value = '';
+    option.textContent = 'No repositories found';
+    select.appendChild(option);
+    return;
+  }
+
+  for (const repository of state.githubResults) {
+    const option = document.createElement('option');
+    option.value = repository.cloneUrl;
+    option.disabled = repository.installed === true || repository.packageReadable === false;
+    option.textContent = `${repository.pluginName || repository.fullName} ${repository.pluginVersion ? `v${repository.pluginVersion}` : ''}`;
+    select.appendChild(option);
+
+    const row = document.createElement('div');
+    row.className = 'plugin-row';
+    const topics = (repository.topics || []).slice(0, 6)
+      .map((topic) => `<span class="badge">${escapeHtml(topic)}</span>`)
+      .join('');
+    row.innerHTML = `
+      <div>
+        <div class="plugin-title">
+          <a class="repo-link" href="${escapeHtml(repository.htmlUrl)}" target="_blank" rel="noreferrer">${escapeHtml(repository.pluginName || repository.fullName)}</a>
+          ${repository.pluginVersion ? `<span class="badge">v${escapeHtml(repository.pluginVersion)}</span>` : ''}
+          ${repository.installed ? '<span class="badge ok">installed</span>' : ''}
+          ${repository.packageReadable === false ? '<span class="badge error">invalid</span>' : ''}
+        </div>
+        <div class="plugin-meta">${escapeHtml(repository.pluginDescription || repository.description || 'No description')}</div>
+        <div class="plugin-meta">Author: ${escapeHtml(repository.author || repository.owner || 'unknown')}</div>
+        <div class="plugin-meta">${escapeHtml(repository.fullName)} - ${escapeHtml(repository.language || 'Unknown')} - ${repository.stars} stars - ${repository.forks} forks</div>
+        ${repository.packageError ? `<div class="plugin-meta level-error">${escapeHtml(repository.packageError)}</div>` : ''}
+        <div class="plugin-title">${topics}</div>
+      </div>
+      <div class="plugin-actions">
+        <button class="button primary" data-install-github="${escapeHtml(repository.cloneUrl)}" ${repository.installed || repository.packageReadable === false ? 'disabled' : ''}>Install</button>
+      </div>
     `;
     list.appendChild(row);
   }
@@ -127,9 +212,9 @@ function appendLog(entry) {
   const line = document.createElement('div');
   line.className = 'log-line';
   line.innerHTML = `
-    <small>${entry.timestamp}</small>
-    <strong class="level-${entry.level}">${entry.level}</strong>
-    <span>${entry.meta?.scope ? `[${entry.meta.scope}] ` : ''}${entry.message}</span>
+    <small>${escapeHtml(entry.timestamp)}</small>
+    <strong class="level-${escapeHtml(entry.level)}">${escapeHtml(entry.level)}</strong>
+    <span>${entry.meta?.scope ? `[${escapeHtml(entry.meta.scope)}] ` : ''}${escapeHtml(entry.message)}</span>
   `;
   stream.appendChild(line);
   stream.scrollTop = stream.scrollHeight;
@@ -163,6 +248,27 @@ async function loadCommands() {
   const { commands } = await api('/api/commands');
   state.commands = commands;
   renderCommands();
+}
+
+async function searchGithubPlugins() {
+  const params = new URLSearchParams({
+    topic: $('#githubTopic').value.trim() || 'nekosunebot-package',
+    query: $('#githubSearch').value.trim(),
+    sort: $('#githubSort').value,
+    limit: '12'
+  });
+  const { repositories } = await api(`/api/plugins/discover/github?${params.toString()}`);
+  state.githubResults = repositories;
+  renderGithubResults();
+}
+
+async function installGithubSource(source) {
+  if (!source) throw new Error('Select a GitHub plugin first.');
+  await api('/api/plugins/install', {
+    method: 'POST',
+    body: JSON.stringify({ source })
+  });
+  await Promise.all([loadPlugins(), searchGithubPlugins()]);
 }
 
 async function loadCoreSettings() {
@@ -227,6 +333,34 @@ function bindActions() {
     toast('Plugin installed');
   });
 
+  $('#githubSearchForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    await searchGithubPlugins();
+    toast('GitHub search complete');
+  });
+
+  $('#githubResults').addEventListener('click', async (event) => {
+    const button = event.target.closest('button[data-install-github]');
+    if (!button) return;
+
+    await installGithubSource(button.dataset.installGithub);
+    toast('GitHub plugin installed');
+  });
+
+  $('#installSelectedGithubPlugin').addEventListener('click', async () => {
+    await installGithubSource($('#githubResultSelect').value);
+    toast('Selected GitHub plugin installed');
+  });
+
+  $('#checkPluginUpdates').addEventListener('click', async () => {
+    await api('/api/plugins/check-updates', {
+      method: 'POST',
+      body: '{}'
+    });
+    await loadPlugins();
+    toast('Plugin update check complete');
+  });
+
   $('#pluginList').addEventListener('click', async (event) => {
     const button = event.target.closest('button');
     if (!button) return;
@@ -241,6 +375,7 @@ function bindActions() {
     const id = button.dataset.id;
     if (!action || !id) return;
     if (action === 'uninstall' && !confirm(`Uninstall ${id}?`)) return;
+    if (action === 'update' && !confirm(`Update ${id} from GitHub?`)) return;
 
     await api(`/api/plugins/${encodeURIComponent(id)}/${action}`, {
       method: 'POST',
@@ -305,6 +440,7 @@ window.addEventListener('DOMContentLoaded', async () => {
   bindActions();
   try {
     await refreshAll();
+    await searchGithubPlugins();
     await connectLogs();
     if (state.plugins[0]) await loadPluginConfig(state.plugins[0].id);
   } catch (error) {

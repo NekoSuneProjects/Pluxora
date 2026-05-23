@@ -1,3 +1,5 @@
+const { searchGithubPluginRepositories } = require('../utils/githubDiscovery');
+
 function parseConfigValue(raw) {
   if (raw === undefined) return undefined;
   try {
@@ -41,6 +43,9 @@ function registerCoreCommands({ commandManager, pluginManager, configManager, re
           { name: 'enable', value: 'enable' },
           { name: 'disable', value: 'disable' },
           { name: 'reload', value: 'reload' },
+          { name: 'update', value: 'update' },
+          { name: 'check-update', value: 'check-update' },
+          { name: 'check-updates', value: 'check-updates' },
           { name: 'uninstall', value: 'uninstall' },
           { name: 'status', value: 'status' },
           { name: 'sync-commands', value: 'sync-commands' }
@@ -57,11 +62,22 @@ function registerCoreCommands({ commandManager, pluginManager, configManager, re
       const action = ctx.options.action || ctx.args[0];
       const pluginId = ctx.options.id || ctx.args[1];
 
-      if (!action) return ctx.reply('Usage: plugin <enable|disable|reload|uninstall|status|sync-commands> [plugin-id]');
+      if (!action) return ctx.reply('Usage: plugin <enable|disable|reload|update|check-update|check-updates|uninstall|status|sync-commands> [plugin-id]');
 
       if (action === 'sync-commands') {
         await commandManager.syncSlashCommands();
         return ctx.reply('Slash command sync requested.');
+      }
+
+      if (action === 'check-updates') {
+        const results = await pluginManager.checkAllPluginUpdates();
+        if (!results.length) return ctx.reply('No GitHub-installed plugins were found.');
+        const lines = results.map((result) => {
+          if (result.error) return `${result.id}: check failed - ${result.error}`;
+          const marker = result.updateAvailable ? 'update available' : 'current';
+          return `${result.id}: ${marker} (${result.currentVersion || '?'} -> ${result.latestVersion || '?'})`;
+        });
+        return ctx.reply(lines.join('\n'));
       }
 
       if (!pluginId) return ctx.reply('Plugin id is required for this action.');
@@ -81,6 +97,18 @@ function registerCoreCommands({ commandManager, pluginManager, configManager, re
         return ctx.reply(`Plugin "${pluginId}" reloaded.`);
       }
 
+      if (action === 'check-update') {
+        const result = await pluginManager.checkPluginUpdate(pluginId);
+        if (result.message) return ctx.reply(result.message);
+        const marker = result.updateAvailable ? 'available' : 'not available';
+        return ctx.reply(`Plugin "${pluginId}" update ${marker}: ${result.currentVersion} -> ${result.latestVersion} (${result.updateReason}).`);
+      }
+
+      if (action === 'update') {
+        const plugin = await pluginManager.updatePlugin(pluginId);
+        return ctx.reply(`Plugin "${pluginId}" updated to ${plugin.version}.`);
+      }
+
       if (action === 'uninstall') {
         await pluginManager.uninstallPlugin(pluginId);
         return ctx.reply(`Plugin "${pluginId}" uninstalled.`);
@@ -93,6 +121,50 @@ function registerCoreCommands({ commandManager, pluginManager, configManager, re
       }
 
       return ctx.reply(`Unknown plugin action "${action}".`);
+    }
+  });
+
+  commandManager.registerCommand('core', {
+    name: 'pluginsearch',
+    description: 'Find plugin repositories on GitHub by topic.',
+    ownerOnly: true,
+    cooldownMs: 5000,
+    options: [
+      {
+        name: 'query',
+        description: 'Optional keywords to narrow results',
+        type: 'string',
+        required: false
+      },
+      {
+        name: 'topic',
+        description: 'GitHub topic to search',
+        type: 'string',
+        required: false
+      }
+    ],
+    async execute(ctx) {
+      const discoveryConfig = configManager.getCore('plugins.discovery.github', {});
+      if (discoveryConfig.enabled === false) return ctx.reply('GitHub plugin discovery is disabled.');
+
+      const result = await searchGithubPluginRepositories({
+        topic: ctx.options.topic || discoveryConfig.topic,
+        query: ctx.options.query || ctx.args.join(' '),
+        limit: 5,
+        defaultLimit: discoveryConfig.defaultLimit,
+        sort: discoveryConfig.sort,
+        order: discoveryConfig.order
+      });
+
+      if (!result.repositories.length) {
+        return ctx.reply(`No repositories found for ${result.query}.`);
+      }
+
+      const lines = result.repositories.map((repository, index) => {
+        return `${index + 1}. ${repository.fullName} (${repository.stars} stars)\n${repository.cloneUrl}`;
+      });
+
+      return ctx.reply(`GitHub plugin results for ${result.query}:\n${lines.join('\n')}`);
     }
   });
 

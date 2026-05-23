@@ -33,6 +33,15 @@
     "configDirectory": "config/plugins",
     "dataDirectory": "data/plugins",
     "autoLoad": true,
+    "discovery": {
+      "github": {
+        "enabled": true,
+        "topic": "nekosunebot-package",
+        "defaultLimit": 12,
+        "sort": "stars",
+        "order": "desc"
+      }
+    },
     "installDependencies": true,
     "dependencyInstall": {
       "ignoreScripts": true,

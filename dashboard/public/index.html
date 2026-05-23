@@ -56,7 +56,29 @@
           </form>
         </div>
         <div class="panel">
-          <h2>Plugins</h2>
+          <h2>GitHub Discovery</h2>
+          <form id="githubSearchForm" class="inline-form">
+            <label for="githubSearch">Topic</label>
+            <input id="githubTopic" name="topic" type="text" value="nekosunebot-package" required>
+            <input id="githubSearch" name="query" type="search" placeholder="Optional keywords">
+            <select id="githubSort" name="sort">
+              <option value="stars">Stars</option>
+              <option value="updated">Updated</option>
+              <option value="forks">Forks</option>
+            </select>
+            <button class="button primary" type="submit">Find</button>
+          </form>
+          <div class="editor-toolbar discovery-select">
+            <select id="githubResultSelect"></select>
+            <button id="installSelectedGithubPlugin" class="button primary">Install Selected</button>
+          </div>
+          <div id="githubResults" class="discovery-list"></div>
+        </div>
+        <div class="panel">
+          <div class="editor-toolbar">
+            <h2>Plugins</h2>
+            <button id="checkPluginUpdates" class="button">Check Updates</button>
+          </div>
           <div id="pluginList" class="plugin-list"></div>
         </div>
         <div class="panel">

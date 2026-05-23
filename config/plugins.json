@@ -9,7 +9,12 @@
       "requiresRestart": false,
       "status": "loaded",
       "lastError": null,
-      "loadedAt": "2026-05-23T08:18:50.087Z"
+      "loadedAt": "2026-05-23T08:57:48.684Z",
+      "description": "Example command plugin with prefix, slash, permissions, and dashboard component support.",
+      "author": "ModularDiscordBot Examples",
+      "homepage": null,
+      "repository": null,
+      "githubUrl": null
     },
     "utility-example": {
       "enabled": true,
@@ -20,7 +25,12 @@
       "requiresRestart": false,
       "status": "loaded",
       "lastError": null,
-      "loadedAt": "2026-05-23T08:18:50.713Z"
+      "loadedAt": "2026-05-23T08:57:48.896Z",
+      "description": "Example utility plugin with auto-moderation, XP leveling, storage, and config management.",
+      "author": "ModularDiscordBot Examples",
+      "homepage": null,
+      "repository": null,
+      "githubUrl": null
     },
     "music-example": {
       "enabled": false,
@@ -28,7 +38,9 @@
       "version": "1.0.0",
       "source": "local",
       "path": "plugins\\music-example",
-      "requiresRestart": false
+      "requiresRestart": false,
+      "description": "Example music plugin using @discordjs/voice and play-dl for YouTube and Spotify lookup.",
+      "author": "ModularDiscordBot Examples"
     }
   }
 }

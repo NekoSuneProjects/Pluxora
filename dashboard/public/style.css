@@ -123,6 +123,12 @@ select {
   border-color: var(--focus);
 }
 
+.button:disabled,
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .workspace {
   min-width: 0;
   padding: 24px;
@@ -228,6 +234,7 @@ select:focus {
 }
 
 .plugin-list,
+.discovery-list,
 .compact-list {
   display: grid;
   gap: 10px;
@@ -241,6 +248,23 @@ select:focus {
   align-items: center;
 }
 
+.discovery-list {
+  margin-top: 12px;
+}
+
+.discovery-select {
+  margin-top: 12px;
+}
+
+.repo-link {
+  color: var(--accent-strong);
+  text-decoration: none;
+}
+
+.repo-link:hover {
+  text-decoration: underline;
+}
+
 .plugin-title {
   display: flex;
   align-items: center;
@@ -250,6 +274,10 @@ select:focus {
 
 .plugin-title strong {
   overflow-wrap: anywhere;
+}
+
+.plugin-meta a {
+  color: var(--accent-strong);
 }
 
 .badge {

@@ -6,10 +6,54 @@ const {
   validatePluginDirectory,
   installPluginFromSource
 } = require('../utils/pluginInstaller');
+const {
+  getGithubRemotePluginInfo,
+  parseGithubRepositoryUrl
+} = require('../utils/githubDiscovery');
 
 function startsWithPath(candidate, parent) {
   const relative = path.relative(parent, candidate);
   return relative === '' || (!relative.startsWith('..') && !path.isAbsolute(relative));
+}
+
+function parseVersion(version) {
+  return String(version || '0.0.0')
+    .split(/[.-]/)
+    .slice(0, 3)
+    .map((part) => {
+      const value = Number.parseInt(part, 10);
+      return Number.isFinite(value) ? value : 0;
+    });
+}
+
+function compareVersions(left, right) {
+  const a = parseVersion(left);
+  const b = parseVersion(right);
+  for (let index = 0; index < 3; index += 1) {
+    if (a[index] > b[index]) return 1;
+    if (a[index] < b[index]) return -1;
+  }
+  return 0;
+}
+
+function isNewerDate(left, right) {
+  if (!left || !right) return Boolean(left && !right);
+  return new Date(left).getTime() > new Date(right).getTime();
+}
+
+function remoteRegistryFields(remote) {
+  if (!remote) return {};
+  return {
+    latestVersion: remote.manifest.version,
+    latestPushedAt: remote.repository.pushedAt,
+    latestPackagePath: remote.packagePath,
+    sourceRepository: remote.repository.fullName,
+    githubUrl: remote.manifest.githubUrl || remote.repository.htmlUrl,
+    homepage: remote.manifest.homepage,
+    repository: remote.manifest.repository || remote.repository.htmlUrl,
+    author: remote.manifest.author || remote.repository.owner,
+    remoteDescription: remote.manifest.description || remote.repository.description
+  };
 }
 
 class PluginManager {
@@ -68,6 +112,11 @@ class PluginManager {
       await this.configManager.setPluginState(manifest.id, {
         name: manifest.name,
         version: manifest.version,
+        description: manifest.description,
+        author: manifest.author || current.author,
+        homepage: manifest.homepage || current.homepage,
+        repository: manifest.repository || current.repository,
+        githubUrl: manifest.githubUrl || current.githubUrl,
         path: path.relative(this.rootDir, pluginPath),
         requiresRestart: manifest.requiresRestart
       });
@@ -78,6 +127,11 @@ class PluginManager {
       enabled: manifest.defaultEnabled,
       name: manifest.name,
       version: manifest.version,
+      description: manifest.description,
+      author: manifest.author,
+      homepage: manifest.homepage,
+      repository: manifest.repository,
+      githubUrl: manifest.githubUrl,
       source: 'local',
       path: path.relative(this.rootDir, pluginPath),
       installedAt: new Date().toISOString(),
@@ -118,12 +172,96 @@ class PluginManager {
     };
   }
 
-  createPluginContext(pluginId, manifest, pluginPath, config) {
+  createTrackedClient(pluginId, manifest, eventListeners) {
+    const removeTrackedListener = (eventName, original) => {
+      const index = eventListeners.findIndex((entry) => entry.eventName === eventName && entry.original === original);
+      if (index === -1) return false;
+      const [entry] = eventListeners.splice(index, 1);
+      this.client.removeListener(entry.eventName, entry.listener);
+      return true;
+    };
+
+    const registerTrackedListener = (method, eventName, original) => {
+      if (typeof original !== 'function') {
+        throw new Error(`Plugin listener for "${eventName}" must be a function.`);
+      }
+
+      const permission = `discord.events.${eventName}`;
+      if (!this.hasPermission(manifest, permission)) {
+        this.logger.warning('Plugin client listener skipped due to missing permission', {
+          pluginId,
+          eventName
+        });
+        return proxy;
+      }
+
+      const listener = (...args) => this.safeInvoke(pluginId, `client.${method}:${eventName}`, original.bind(this.client), ...args);
+      const once = method === 'once' || method === 'prependOnceListener';
+      if (once) this.client.once(eventName, listener);
+      else if (method === 'prependListener') this.client.prependListener(eventName, listener);
+      else this.client.on(eventName, listener);
+
+      eventListeners.push({ eventName, listener, original, method });
+
+      if ((eventName === 'ready' || eventName === 'clientReady') && this.client.isReady()) {
+        setImmediate(() => listener(this.client));
+      }
+
+      return proxy;
+    };
+
+    const proxy = new Proxy(this.client, {
+      get: (target, property) => {
+        if (['on', 'addListener', 'once', 'prependListener', 'prependOnceListener'].includes(property)) {
+          return (eventName, listener) => registerTrackedListener(property, eventName, listener);
+        }
+
+        if (['off', 'removeListener'].includes(property)) {
+          return (eventName, listener) => {
+            removeTrackedListener(eventName, listener);
+            return proxy;
+          };
+        }
+
+        if (property === 'removeAllListeners') {
+          return (eventName) => {
+            const matches = eventListeners.filter((entry) => !eventName || entry.eventName === eventName);
+            for (const entry of matches) {
+              removeTrackedListener(entry.eventName, entry.original);
+            }
+            return proxy;
+          };
+        }
+
+        const value = target[property];
+        return typeof value === 'function' ? value.bind(target) : value;
+      }
+    });
+
+    return {
+      client: proxy,
+      on: (eventName, listener) => registerTrackedListener('on', eventName, listener),
+      once: (eventName, listener) => registerTrackedListener('once', eventName, listener),
+      off: (eventName, listener) => {
+        removeTrackedListener(eventName, listener);
+        return proxy;
+      }
+    };
+  }
+
+  createPluginContext(pluginId, manifest, pluginPath, config, eventListeners = []) {
     const logger = this.logger.child(pluginId);
+    const trackedClient = this.createTrackedClient(pluginId, manifest, eventListeners);
     return {
       pluginId,
       manifest,
-      client: this.client,
+      client: trackedClient.client,
+      rawClient: this.client,
+      events: {
+        on: trackedClient.on,
+        once: trackedClient.once,
+        off: trackedClient.off
+      },
       logger,
       config,
       getConfig: (pathExpression, fallback) => this.configManager.getPluginConfig(pluginId, pathExpression, fallback),
@@ -193,11 +331,12 @@ class PluginManager {
       const config = await this.configManager.ensurePluginConfig(pluginId, provisionalConfig);
       await fs.ensureDir(this.pluginDataDirectory(pluginId));
 
-      const baseContext = this.createPluginContext(pluginId, manifest, pluginPath, config);
+      const eventListeners = [];
+      const baseContext = this.createPluginContext(pluginId, manifest, pluginPath, config, eventListeners);
       const pluginModule = typeof exported === 'function' ? await exported(baseContext) : exported;
       const defaultConfig = await this.readDefaultConfig(pluginPath, pluginModule || {});
       const finalConfig = await this.configManager.ensurePluginConfig(pluginId, defaultConfig);
-      const context = this.createPluginContext(pluginId, manifest, pluginPath, finalConfig);
+      const context = this.createPluginContext(pluginId, manifest, pluginPath, finalConfig, eventListeners);
 
       const record = {
         id: pluginId,
@@ -205,7 +344,7 @@ class PluginManager {
         path: pluginPath,
         module: pluginModule,
         context,
-        eventListeners: [],
+        eventListeners,
         status: 'loaded',
         loadedAt: new Date().toISOString()
       };
@@ -230,6 +369,13 @@ class PluginManager {
 
       await this.configManager.setPluginState(pluginId, {
         enabled: true,
+        name: manifest.name,
+        version: manifest.version,
+        description: manifest.description,
+        author: manifest.author,
+        homepage: manifest.homepage,
+        repository: manifest.repository,
+        githubUrl: manifest.githubUrl,
         status: 'loaded',
         lastError: null,
         loadedAt: record.loadedAt,
@@ -274,7 +420,11 @@ class PluginManager {
 
       if (eventDefinition.once) this.client.once(eventName, listener);
       else this.client.on(eventName, listener);
-      record.eventListeners.push({ eventName, listener });
+      record.eventListeners.push({ eventName, listener, method: eventDefinition.once ? 'once' : 'on' });
+
+      if ((eventName === 'ready' || eventName === 'clientReady') && this.client.isReady()) {
+        setImmediate(() => listener(this.client));
+      }
     }
   }
 
@@ -352,10 +502,29 @@ class PluginManager {
       logger: this.logger
     });
 
+    const remote = parseGithubRepositoryUrl(source)
+      ? await getGithubRemotePluginInfo(source).catch((error) => {
+        this.logger.warning('Unable to read GitHub plugin metadata after install', { source, error });
+        return null;
+      })
+      : null;
+
     await this.discoverPlugins();
     await this.configManager.setPluginState(result.manifest.id, {
       enabled: result.manifest.defaultEnabled,
       source,
+      name: result.manifest.name,
+      version: result.manifest.version,
+      description: result.manifest.description,
+      author: result.manifest.author || remote?.manifest.author,
+      homepage: result.manifest.homepage || remote?.manifest.homepage,
+      repository: result.manifest.repository || remote?.manifest.repository,
+      githubUrl: result.manifest.githubUrl || remote?.manifest.githubUrl,
+      sourceType: remote ? 'github' : 'remote',
+      sourcePushedAt: remote?.repository.pushedAt,
+      updateAvailable: false,
+      latestCheckedAt: remote ? new Date().toISOString() : undefined,
+      ...remoteRegistryFields(remote),
       installedAt: new Date().toISOString(),
       status: 'installed'
     });
@@ -365,6 +534,136 @@ class PluginManager {
     }
 
     return result.manifest;
+  }
+
+  async checkPluginUpdate(pluginId) {
+    if (!this.discovered.has(pluginId)) await this.discoverPlugins();
+    const discovered = this.discovered.get(pluginId);
+    const state = this.configManager.getPluginState(pluginId);
+    if (!discovered || !state) throw new Error(`Plugin "${pluginId}" is not installed.`);
+
+    const source = state.source;
+    if (!source || source === 'local' || !parseGithubRepositoryUrl(source)) {
+      const result = {
+        id: pluginId,
+        updateAvailable: false,
+        updateReason: 'no-github-source',
+        message: 'Plugin was not installed from a GitHub source.'
+      };
+      await this.configManager.setPluginState(pluginId, {
+        latestCheckedAt: new Date().toISOString(),
+        updateAvailable: false,
+        updateReason: result.updateReason
+      });
+      return result;
+    }
+
+    const { manifest: localManifest } = await validatePluginDirectory(discovered.path);
+    const remote = await getGithubRemotePluginInfo(source);
+    const remoteVersionNewer = compareVersions(remote.manifest.version, localManifest.version) > 0;
+    const sourceChanged = isNewerDate(remote.repository.pushedAt, state.sourcePushedAt);
+    const updateAvailable = remoteVersionNewer || sourceChanged;
+    const updateReason = remoteVersionNewer ? 'version' : (sourceChanged ? 'source-pushed' : 'current');
+
+    const updateState = {
+      ...remoteRegistryFields(remote),
+      latestCheckedAt: new Date().toISOString(),
+      updateAvailable,
+      updateReason
+    };
+
+    await this.configManager.setPluginState(pluginId, updateState);
+
+    return {
+      id: pluginId,
+      currentVersion: localManifest.version,
+      latestVersion: remote.manifest.version,
+      currentPushedAt: state.sourcePushedAt,
+      latestPushedAt: remote.repository.pushedAt,
+      updateAvailable,
+      updateReason,
+      repository: remote.repository,
+      manifest: remote.manifest
+    };
+  }
+
+  async checkAllPluginUpdates() {
+    const results = [];
+    await this.discoverPlugins();
+    for (const plugin of this.listPlugins()) {
+      if (!plugin.source || plugin.source === 'local' || !parseGithubRepositoryUrl(plugin.source)) continue;
+      try {
+        results.push(await this.checkPluginUpdate(plugin.id));
+      } catch (error) {
+        this.logger.error('Plugin update check failed', { pluginId: plugin.id, error });
+        results.push({
+          id: plugin.id,
+          updateAvailable: false,
+          updateReason: 'error',
+          error: error.message
+        });
+      }
+    }
+    return results;
+  }
+
+  async updatePlugin(pluginId) {
+    if (!this.discovered.has(pluginId)) await this.discoverPlugins();
+    const discovered = this.discovered.get(pluginId);
+    const state = this.configManager.getPluginState(pluginId);
+    if (!discovered || !state) throw new Error(`Plugin "${pluginId}" is not installed.`);
+
+    const source = state.source;
+    if (!source || source === 'local' || !parseGithubRepositoryUrl(source)) {
+      throw new Error(`Plugin "${pluginId}" was not installed from a GitHub source and cannot be updated automatically.`);
+    }
+
+    const wasEnabled = state.enabled !== false;
+    const previousVersion = state.version;
+    await this.unloadPlugin(pluginId);
+
+    const securityConfig = this.configManager.getCore('security', {});
+    const result = await installPluginFromSource(source, {
+      pluginsDirectory: this.pluginsDirectory(),
+      allowedHosts: securityConfig.allowedPluginHosts || [],
+      allowRemoteInstall: securityConfig.allowRemotePluginInstall !== false,
+      allowUntrusted: securityConfig.allowUntrustedPluginInstall === true,
+      maxArchiveBytes: securityConfig.maxPluginArchiveBytes || 50 * 1024 * 1024,
+      overwrite: true,
+      expectedPluginId: pluginId,
+      logger: this.logger
+    });
+    const remote = await getGithubRemotePluginInfo(source).catch((error) => {
+      this.logger.warning('Unable to read GitHub plugin metadata after update', { pluginId, source, error });
+      return null;
+    });
+
+    await this.discoverPlugins();
+    await this.configManager.setPluginState(pluginId, {
+      enabled: wasEnabled,
+      source,
+      sourceType: 'github',
+      name: result.manifest.name,
+      version: result.manifest.version,
+      previousVersion,
+      description: result.manifest.description,
+      author: result.manifest.author || remote?.manifest.author,
+      homepage: result.manifest.homepage || remote?.manifest.homepage,
+      repository: result.manifest.repository || remote?.manifest.repository,
+      githubUrl: result.manifest.githubUrl || remote?.manifest.githubUrl,
+      sourcePushedAt: remote?.repository.pushedAt,
+      updateAvailable: false,
+      updateReason: 'updated',
+      latestCheckedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      status: wasEnabled ? 'installed' : 'disabled',
+      lastError: null,
+      ...remoteRegistryFields(remote)
+    });
+
+    if (wasEnabled) await this.loadPlugin(pluginId);
+    this.logger.info('Plugin updated', { pluginId, previousVersion, version: result.manifest.version });
+    return this.listPlugins().find((plugin) => plugin.id === pluginId);
   }
 
   async getDashboardComponent(pluginId) {
@@ -398,13 +697,28 @@ class PluginManager {
         id: pluginId,
         name: manifest.name || state.name || pluginId,
         version: manifest.version || state.version,
+        latestVersion: state.latestVersion,
+        previousVersion: state.previousVersion,
         description: manifest.description || state.description,
+        author: manifest.author || state.author,
+        homepage: manifest.homepage || state.homepage,
+        repository: manifest.repository || state.repository,
+        githubUrl: manifest.githubUrl || state.githubUrl,
         enabled: state.enabled !== false,
         status: state.status || (loaded ? 'loaded' : 'installed'),
         loaded: Boolean(loaded),
         requiresRestart: Boolean(manifest.requiresRestart || state.requiresRestart),
         permissions: manifest.permissions || [],
         lastError: state.lastError,
+        source: state.source,
+        sourceType: state.sourceType,
+        sourceRepository: state.sourceRepository,
+        sourcePushedAt: state.sourcePushedAt,
+        latestPushedAt: state.latestPushedAt,
+        latestCheckedAt: state.latestCheckedAt,
+        updateAvailable: state.updateAvailable === true,
+        updateReason: state.updateReason,
+        updatedAt: state.updatedAt,
         path: state.path || (discovered?.path ? path.relative(this.rootDir, discovered.path) : undefined)
       };
     });

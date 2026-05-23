@@ -2,6 +2,7 @@
   "name": "utility-example",
   "version": "1.0.0",
   "description": "Example utility plugin with auto-moderation, XP leveling, storage, and config management.",
+  "author": "ModularDiscordBot Examples",
   "main": "index.js",
   "dependencies": {
     "fs-extra": "^11.3.5"

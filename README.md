@@ -10,6 +10,8 @@ Production-grade Discord.js v14 bot scaffold with dynamic plugins, plugin-local 
 - Prefix commands, slash command payload generation, permissions, owner-only commands, and cooldowns
 - Discord events registered by plugins with permission manifest checks
 - Express dashboard with Discord OAuth2 login, plugin controls, JSON config editors, command testing, and live logs
+- GitHub plugin discovery by repository topic, defaulting to `nekosunebot-package`
+- GitHub update checks for installed plugins, including remote version and pushed date comparison
 - Config hot reload from `config/core.json` and `config/plugins/*.json`
 - Graceful shutdown and watchdog restart flow
 - Bundled examples for command, utility/automod/XP, and music playback
@@ -37,6 +39,7 @@ DISCORD_CLIENT_ID=your-application-client-id
 DISCORD_CLIENT_SECRET=your-oauth-client-secret
 DISCORD_REDIRECT_URI=http://localhost:3000/auth/discord/callback
 DASHBOARD_SESSION_SECRET=replace-with-a-long-random-string
+GITHUB_TOKEN=optional-token-for-higher-github-search-rate-limits
 ```
 
 Edit `config/core.json`:
@@ -117,10 +120,18 @@ Minimum `package.json`:
 {
   "name": "my-plugin",
   "version": "1.0.0",
+  "author": "Your Name",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/you/my-plugin.git"
+  },
   "main": "index.js",
   "modularDiscordBotPlugin": {
     "id": "my-plugin",
     "name": "My Plugin",
+    "author": "Your Name",
+    "homepage": "https://github.com/you/my-plugin",
+    "repository": "https://github.com/you/my-plugin",
     "entry": "index.js",
     "defaultEnabled": true,
     "permissions": ["discord.commands"]
@@ -162,6 +173,10 @@ module.exports = {
 Plugin context includes:
 
 - `client`
+- `rawClient`
+- `events.on(eventName, listener)`
+- `events.once(eventName, listener)`
+- `events.off(eventName, listener)`
 - `logger`
 - `config`
 - `getConfig(path, fallback)`
@@ -170,6 +185,20 @@ Plugin context includes:
 - `storagePath`
 - `configManager`
 - `commandManager`
+
+`ctx.client` is a tracked Discord client proxy. Plugins can use `ctx.client.on('guildCreate', handler)`, `ctx.client.once('ready', handler)`, or `ctx.events.on(...)`; the plugin manager wraps the listener, isolates thrown errors, checks declared event permissions, and removes the listener on unload or reload. Use `rawClient` only when you intentionally need the unwrapped Discord.js client.
+
+Event listeners require matching permissions when `security.enforcePluginPermissions` is enabled:
+
+```json
+"permissions": [
+  "discord.events.ready",
+  "discord.events.guildCreate",
+  "discord.events.guildMemberAdd"
+]
+```
+
+Use `discord.events.*` for a plugin that legitimately needs many client events.
 
 ## Plugin Dependencies
 
@@ -189,6 +218,9 @@ The dashboard supports:
 
 - Installed plugin inventory
 - Git/ZIP plugin installation from allowed hosts
+- GitHub plugin search using the `nekosunebot-package` topic
+- Search result dropdown selection and one-click install
+- GitHub update checks and plugin update action
 - Enable, disable, reload, uninstall
 - Core config editing
 - Plugin config editing
@@ -205,6 +237,32 @@ Remote plugin installation is controlled by:
   "allowedPluginHosts": ["github.com", "raw.githubusercontent.com", "codeload.github.com"]
 }
 ```
+
+Plugin discovery is controlled by:
+
+```json
+"plugins": {
+  "discovery": {
+    "github": {
+      "enabled": true,
+      "topic": "nekosunebot-package",
+      "defaultLimit": 12,
+      "sort": "stars",
+      "order": "desc"
+    }
+  }
+}
+```
+
+To make a third-party plugin discoverable, publish it as a GitHub repository and add the `nekosunebot-package` topic. The dashboard search lists matching repositories and installs through the same validated plugin install flow.
+
+Plugins installed from GitHub keep their source URL in `config/plugins.json`. Update checks compare:
+
+- Installed plugin version from local `package.json`
+- Remote plugin version from GitHub `package.json`
+- Last known GitHub `pushed_at` timestamp
+
+If the remote version is newer, or the GitHub source has been pushed since install/update, the plugin is marked with `updateAvailable`.
 
 ## Bundled Plugins
 
@@ -238,9 +296,14 @@ Useful owner commands:
 ```text
 !plugins
 !plugin reload command-example
+!plugin check-updates
+!plugin check-update my-plugin
+!plugin update my-plugin
 !plugin enable music-example
 !plugin disable utility-example
 !plugin sync-commands
+!pluginsearch
+!pluginsearch music
 !botsettings get bot.prefix
 !botsettings set bot.prefix "?"
 !botrestart
