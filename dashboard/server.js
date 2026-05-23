@@ -9,6 +9,27 @@ const rateLimit = require('express-rate-limit');
 const { WebSocketServer } = require('ws');
 const { searchGithubPluginRepositories } = require('../utils/githubDiscovery');
 
+
+function mergeSensitiveCoreFields(nextCore = {}, currentCore = {}) {
+  const merged = structuredClone(nextCore);
+  if (!merged.discord) merged.discord = {};
+  if (!merged.dashboard) merged.dashboard = {};
+
+  if (merged.discord.token === '***redacted***') merged.discord.token = currentCore?.discord?.token || '';
+  if (merged.dashboard.sessionSecret === '***redacted***') merged.dashboard.sessionSecret = currentCore?.dashboard?.sessionSecret || '';
+  return merged;
+}
+
+function sanitizeCoreForDashboard(core = {}) {
+  const next = structuredClone(core);
+  if (!next.discord) next.discord = {};
+  if (!next.dashboard) next.dashboard = {};
+  next.discord.token = next.discord.token ? '***redacted***' : '';
+  next.dashboard.sessionSecret = next.dashboard.sessionSecret ? '***redacted***' : '';
+  return next;
+}
+
+
 class DashboardServer {
   constructor({ client, configManager, pluginManager, commandManager, logger, rootDir = process.cwd() }) {
     this.client = client;
@@ -341,7 +362,7 @@ class DashboardServer {
     });
 
     api.get('/settings/core', (req, res) => {
-      res.json({ config: this.configManager.core });
+      res.json({ config: sanitizeCoreForDashboard(this.configManager.core) });
     });
 
     api.put('/settings/core', async (req, res, next) => {
@@ -349,8 +370,9 @@ class DashboardServer {
         if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
           return res.status(400).json({ error: 'JSON object body is required' });
         }
-        await this.configManager.saveCore(req.body);
-        res.json({ config: this.configManager.core });
+        const safeCore = mergeSensitiveCoreFields(req.body, this.configManager.fileCore || this.configManager.core);
+        await this.configManager.saveCore(safeCore);
+        res.json({ config: sanitizeCoreForDashboard(this.configManager.core) });
       } catch (error) {
         next(error);
       }

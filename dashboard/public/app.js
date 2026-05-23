@@ -106,7 +106,6 @@ function renderPlugins() {
 
     const row = document.createElement('div');
     row.className = 'plugin-row';
-    const packageLines = (repository.pluginPackages || []).map((pkg) => `<div class="plugin-meta">- ${escapeHtml(pkg.pluginId)} (${escapeHtml(pkg.packagePath)}) ${pkg.installed ? '<span class="badge ok">installed</span>' : ''}</div>`).join('');
     row.innerHTML = `
       <div>
         <div class="plugin-title"><strong>${escapeHtml(plugin.name || plugin.id)}</strong><span class="badge">${escapeHtml(plugin.id)}</span>${pluginBadge(plugin)}</div>
@@ -141,7 +140,6 @@ function renderCommands() {
   for (const command of state.commands) {
     const row = document.createElement('div');
     row.className = 'plugin-row';
-    const packageLines = (repository.pluginPackages || []).map((pkg) => `<div class="plugin-meta">- ${escapeHtml(pkg.pluginId)} (${escapeHtml(pkg.packagePath)}) ${pkg.installed ? '<span class="badge ok">installed</span>' : ''}</div>`).join('');
     row.innerHTML = `
       <div>
         <div class="plugin-title"><strong>${escapeHtml(command.name)}</strong><span class="badge">${escapeHtml(command.pluginId)}</span></div>
@@ -184,7 +182,6 @@ function renderGithubResults() {
     const topics = (repository.topics || []).slice(0, 6)
       .map((topic) => `<span class="badge">${escapeHtml(topic)}</span>`)
       .join('');
-    const packageLines = (repository.pluginPackages || []).map((pkg) => `<div class="plugin-meta">- ${escapeHtml(pkg.pluginId)} (${escapeHtml(pkg.packagePath)}) ${pkg.installed ? '<span class="badge ok">installed</span>' : ''}</div>`).join('');
     row.innerHTML = `
       <div>
         <div class="plugin-title">

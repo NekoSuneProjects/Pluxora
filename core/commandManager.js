@@ -128,6 +128,36 @@ class CommandManager {
     return this.commands.get(name) || this.commands.get(this.aliases.get(name));
   }
 
+  commandMode() {
+    return this.configManager.getCore('commands.mode', 'both');
+  }
+
+  scheduleSlashSync(reason = 'runtime change') {
+    if (!this.configManager.getCore('commands.autoSyncSlash', true)) return;
+    if (this.pendingSyncTimer) clearTimeout(this.pendingSyncTimer);
+    this.pendingSyncTimer = setTimeout(async () => {
+      this.pendingSyncTimer = null;
+      try {
+        await this.syncSlashCommands();
+        this.logger.info('Auto slash sync completed', { reason });
+      } catch (error) {
+        this.logger.error('Auto slash sync failed', { reason, error });
+      }
+    }, 1200);
+  }
+
+  groupedPayloads(commandsByCategory) {
+    return Object.entries(commandsByCategory).slice(0, 100).map(([category, commands]) => ({
+      name: category.slice(0, 32),
+      description: `Commands for ${category}`.slice(0, 100),
+      options: commands.slice(0, 25).map((command) => ({
+        type: ApplicationCommandOptionType.Subcommand,
+        name: command.name,
+        description: (command.description || command.name).slice(0, 100)
+      }))
+    }));
+  }
+
   slashPayloads() {
     this.groupedSlashRoutes.clear();
     const slashCommands = Array.from(this.commands.values()).filter((command) => command.slash !== false);
