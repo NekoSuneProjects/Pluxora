@@ -1,5 +1,6 @@
 const path = require('node:path');
 const fs = require('fs-extra');
+const { GatewayIntentBits } = require('discord.js');
 const { installPluginDependencies } = require('../utils/dependencyInstaller');
 const {
   getPluginManifest,
@@ -34,6 +35,21 @@ function compareVersions(left, right) {
     if (a[index] < b[index]) return -1;
   }
   return 0;
+}
+
+function clientHasIntent(client, intent) {
+  const intents = client?.options?.intents;
+  if (!intents) return false;
+  if (typeof intents.has === 'function') return intents.has(intent);
+
+  const bitfield = intents.bitfield ?? intents;
+  if (bitfield === undefined || bitfield === null) return false;
+
+  try {
+    return (BigInt(bitfield) & BigInt(intent)) === BigInt(intent);
+  } catch {
+    return false;
+  }
 }
 
 function isNewerDate(left, right) {
@@ -167,9 +183,22 @@ class PluginManager {
     const configPath = path.join(pluginPath, 'config.json');
     const fileConfig = (await fs.pathExists(configPath)) ? await fs.readJson(configPath) : {};
     return {
-      ...fileConfig,
-      ...(pluginModule.defaultConfig || {})
+      ...(pluginModule.defaultConfig || {}),
+      ...fileConfig
     };
+  }
+
+  warnAboutRuntimeRequirements(pluginId, manifest) {
+    const permissions = manifest.permissions || [];
+    if (
+      permissions.includes('voice') &&
+      !clientHasIntent(this.client, GatewayIntentBits.GuildVoiceStates)
+    ) {
+      this.logger.error('Voice plugin requires the GuildVoiceStates intent.', {
+        pluginId,
+        requiredConfig: 'discord.intents includes "GuildVoiceStates"'
+      });
+    }
   }
 
   createTrackedClient(pluginId, manifest, eventListeners) {
@@ -309,6 +338,7 @@ class PluginManager {
 
     const pluginPath = discovered.path;
     const { manifest, entryPath } = await validatePluginDirectory(pluginPath);
+    this.warnAboutRuntimeRequirements(pluginId, manifest);
     await this.configManager.setPluginState(pluginId, {
       status: 'loading',
       lastError: null,

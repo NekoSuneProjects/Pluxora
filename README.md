@@ -24,6 +24,7 @@ Production-grade Discord.js v14 bot scaffold with dynamic plugins, plugin-local 
 - A Discord application and bot token
 - Message Content intent enabled in the Discord Developer Portal if you want prefix commands and automod text scanning
 - Guild Members intent enabled if plugins need member join or member metadata events
+- Guild Voice States intent in `discord.intents` if you install voice or music plugins
 
 ## Quick Start
 
@@ -48,6 +49,7 @@ Edit `config/core.json` for non-sensitive defaults, and use `.env` for runtime s
 - `commands.mode`: `both`, `slash`, or `prefix`
 - `commands.autoSyncSlash`: auto sync slash commands whenever plugins/config change
 - `discord.ownerIds`: Discord user IDs allowed to run owner-only bot commands
+- `discord.intents`: include `GuildVoiceStates` for voice/music plugins; add `GuildMessages` and `MessageContent` only when you need prefix commands that read message text
 - `dashboard.adminUserIds`: Discord user IDs allowed into the dashboard
 - `commands.guildIds`: guild IDs for fast guild slash command registration
 - `bot.prefix`: prefix command trigger
@@ -211,6 +213,8 @@ Event listeners require matching permissions when `security.enforcePluginPermiss
 ```
 
 Use `discord.events.*` for a plugin that legitimately needs many client events.
+
+Manifest permissions `voice` and `network` are advisory. The host logs an error when a `voice` plugin is loaded without the `GuildVoiceStates` intent, but plugin authors still need to document any external services or gateway intents their plugin requires. Low-level Discord voice libraries that need raw gateway packets should use `ctx.rawClient` or a small tracked wrapper around it, not the permission-filtered `ctx.client`.
 
 ## Plugin Dependencies
 

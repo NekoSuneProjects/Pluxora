@@ -269,9 +269,16 @@ class CommandManager {
         };
         delete interactionPayload.ephemeral;
 
-        if (context.interaction.deferred || context.interaction.replied) {
+        if (context.interaction.deferred && !context.interaction.replied) {
+          const editPayload = { ...interactionPayload };
+          delete editPayload.flags;
+          return context.interaction.editReply(editPayload);
+        }
+
+        if (context.interaction.replied) {
           return context.interaction.followUp(interactionPayload);
         }
+
         return context.interaction.reply(interactionPayload);
       }
 
@@ -371,6 +378,19 @@ class CommandManager {
       }
     }
     if (!command || command.slash === false) return;
+
+    if (command.deferReply !== false && !interaction.deferred && !interaction.replied) {
+      try {
+        const deferOptions = command.deferEphemeral ? { flags: MessageFlags.Ephemeral } : undefined;
+        await interaction.deferReply(deferOptions);
+      } catch (error) {
+        this.logger.warning('Slash command defer failed', {
+          command: command.name,
+          pluginId: command.pluginId,
+          error
+        });
+      }
+    }
 
     const options = this.slashOptions(interaction);
     const context = {

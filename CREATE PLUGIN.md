@@ -97,6 +97,8 @@ commands: [
     aliases: ['p'],
     slash: true,
     prefix: true,
+    deferReply: true,
+    deferEphemeral: false,
     ownerOnly: false,
     cooldownMs: 1500,
     category: 'utility',
@@ -132,6 +134,8 @@ commands: [
 ### Slash vs prefix mode
 Controlled globally by core/env:
 - `commands.mode = both|slash|prefix`
+
+Slash commands are deferred by default before `execute()` runs so slow plugin work does not hit Discord's 3-second interaction timeout. Set `deferReply: false` only for commands that must send their own initial interaction response, such as modal flows. Set `deferEphemeral: true` when the deferred response should be private.
 
 ---
 
@@ -192,6 +196,29 @@ Wildcard for events:
   "permissions": ["discord.events.*"]
 }
 ```
+
+Permissions currently enforced by the host:
+
+- `discord.commands` allows the plugin to register commands.
+- `discord.events.<eventName>` allows one specific Discord.js client event.
+- `discord.events.*` allows all tracked Discord.js client events.
+
+Advisory permissions:
+
+- `voice` marks a plugin as voice-capable. The bot logs an error if `GuildVoiceStates` is missing from `discord.intents`, because Discord voice libraries need that gateway intent.
+- `network` documents that a plugin talks to external services. It is not sandbox-enforced.
+
+Voice/music plugins normally need this in `config/core.json`:
+
+```json
+{
+  "discord": {
+    "intents": ["Guilds", "GuildVoiceStates"]
+  }
+}
+```
+
+Add `GuildMessages` and `MessageContent` only if the plugin also needs prefix commands that read message text.
 
 ---
 
@@ -318,7 +345,7 @@ From dashboard:
 1. Always guard message handlers (`ignore bot users`, `check guild`).
 2. Keep command names lowercase and unique.
 3. Add explicit permissions in manifest.
-4. Use `ctx.client` (tracked) instead of `ctx.rawClient` unless needed.
+4. Use `ctx.client` (tracked) instead of `ctx.rawClient` unless needed. Voice libraries that subscribe to `raw` gateway packets usually need `ctx.rawClient`.
 5. Keep `config.json` defaults small and sane.
 6. Log useful diagnostics via `ctx.logger`.
 7. Catch and validate external API data inside plugin logic.
