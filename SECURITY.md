@@ -54,7 +54,9 @@ Some media or native dependencies may require install scripts. Only disable `ign
 
 ## GitHub Discovery
 
-The dashboard and `pluginsearch` command query GitHub repositories by topic. The default topic is `nekosunebot-package`.
+The dashboard and `pluginsearch` command query GitHub repositories with the hardcoded `pluxora-package` topic. Request parameters and config values cannot override the discovery topic.
+
+Repositories published under that topic must follow `TERMS.md`. Unsafe plugins may be removed from discovery, reported, or refused support if they contain malware, token theft, IP grabbing, hidden data collection, abuse tooling, illegal content, or other dangerous behavior.
 
 Discovery does not prove a repository is safe or compatible. Installation still clones and validates the plugin package shape, but it does not sandbox arbitrary JavaScript. Set `GITHUB_TOKEN` only if you need higher GitHub API rate limits, and use a token with the lowest practical permissions.
 

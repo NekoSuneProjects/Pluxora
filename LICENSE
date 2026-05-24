@@ -1,0 +1,63 @@
+Pluxora Restricted Source License
+Version 1.0
+
+Copyright (c) 2026 NekoSuneVR. All rights reserved.
+
+This license applies to the Pluxora bot source code, documentation, assets,
+dashboard, scripts, and related files in this repository unless a file clearly
+states a different license.
+
+1. Permission Granted
+
+You may view, download, and run this software for your own legitimate Discord
+bot instance. You may make private modifications for your own use.
+
+2. Restrictions
+
+You may not, without prior written permission from the copyright holder:
+
+- steal, copy, mirror, republish, redistribute, sell, sublicense, or rebrand
+  this software or any substantial part of it;
+- fork this repository or publish a modified version of this software;
+- remove copyright, license, attribution, safety, or security notices;
+- claim this software, its code, or its design as your own;
+- use this software to create malware, spyware, token loggers, credential
+  stealers, IP grabbers, phishing tools, spam tools, raid tools, botnets,
+  unauthorized surveillance tools, or other harmful systems;
+- use this software to harass, exploit, threaten, attack, disrupt, or abuse
+  Discord users, communities, services, networks, or infrastructure;
+- use this software to violate Discord's Terms of Service, applicable law, or
+  the rights and safety of other people.
+
+3. Community Plugins and Third-Party Code
+
+Community plugins, third-party plugins, dependencies, and contributed plugin
+packages may have their own licenses and terms. You must follow those licenses
+and terms. This license does not give you permission to ignore, remove, bypass,
+or break any third-party or community plugin license.
+
+Publishing a plugin for Pluxora discovery is also governed by the repository's
+plugin publishing terms, if present.
+
+4. Permission Requests
+
+To request permission for redistribution, forks, public modified versions,
+commercial use, or other rights not granted here, contact the copyright holder
+before doing so.
+
+5. Termination
+
+Any violation of this license immediately terminates your permission to use,
+run, copy, or modify this software. Upon termination, you must stop using the
+software and delete unauthorized copies.
+
+6. No Warranty
+
+This software is provided "as is", without warranty of any kind, express or
+implied. The copyright holder is not liable for damages, losses, abuse, misuse,
+data loss, service interruptions, security incidents, or other consequences
+arising from use of this software.
+
+7. Reservation of Rights
+
+All rights not expressly granted by this license are reserved.

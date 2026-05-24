@@ -262,7 +262,6 @@ async function loadCommands() {
 
 async function searchGithubPlugins() {
   const params = new URLSearchParams({
-    topic: $('#githubTopic').value.trim() || 'nekosunebot-package',
     query: $('#githubSearch').value.trim(),
     sort: $('#githubSort').value,
     limit: '12'

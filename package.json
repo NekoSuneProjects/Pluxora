@@ -1,7 +1,8 @@
 {
-  "name": "modular-discord-bot",
+  "name": "pluxora",
   "version": "1.0.0",
-  "description": "Production-grade modular Discord.js bot with dynamic plugins and a live dashboard.",
+  "description": "Pluxora is a production-grade modular Discord.js bot with dynamic plugins and a live dashboard.",
+  "license": "LicenseRef-Pluxora-Restricted",
   "main": "index.js",
   "private": true,
   "scripts": {

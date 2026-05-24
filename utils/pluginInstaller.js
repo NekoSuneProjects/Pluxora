@@ -205,7 +205,7 @@ async function installPluginFromSource(source, options) {
     throw new Error(`Plugin host "${sourceUrl.hostname}" is not in security.allowedPluginHosts.`);
   }
 
-  const tempRoot = path.join(os.tmpdir(), `modular-discord-bot-${crypto.randomUUID()}`);
+  const tempRoot = path.join(os.tmpdir(), `pluxora-${crypto.randomUUID()}`);
   const sourceDirectory = path.join(tempRoot, 'source');
   await fs.ensureDir(tempRoot);
 

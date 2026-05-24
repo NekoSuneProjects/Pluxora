@@ -1,6 +1,6 @@
-# ModularDiscordBot
+# Pluxora
 
-Production-grade Discord.js v14 bot scaffold with dynamic plugins, plugin-local dependencies, prefix and slash commands, config hot reload, and a Discord OAuth dashboard.
+Pluxora is a production-grade Discord.js v14 bot built around installable plugin packages. It gives you dynamic plugin loading, plugin-local dependencies, prefix and slash commands, config hot reload, GitHub plugin discovery, update checks, and a Discord OAuth dashboard for day-to-day management.
 
 ## Features
 
@@ -10,7 +10,7 @@ Production-grade Discord.js v14 bot scaffold with dynamic plugins, plugin-local 
 - Prefix commands, slash command payload generation, permissions, owner-only commands, and cooldowns
 - Discord events registered by plugins with permission manifest checks
 - Express dashboard with Discord OAuth2 login, plugin controls, JSON config editors, command testing, and live logs
-- GitHub plugin discovery by repository topic, defaulting to `nekosunebot-package`
+- GitHub plugin discovery hardcoded to the `pluxora-package` repository topic
 - GitHub update checks for installed plugins, including remote version and pushed date comparison
 - GitHub discovery supports multi-plugin repositories (root or folder-based package.json) and lets you install a specific plugin package path
 - Config hot reload from `config/core.json` and `config/plugins/*.json`
@@ -234,7 +234,7 @@ The dashboard supports:
 
 - Installed plugin inventory
 - Git/ZIP plugin installation from allowed hosts
-- GitHub plugin search using the `nekosunebot-package` topic
+- GitHub plugin search using the `pluxora-package` topic
 - Search result dropdown selection and one-click install
 - GitHub update checks and plugin update action
 - Enable, disable, reload, uninstall
@@ -261,7 +261,6 @@ Plugin discovery is controlled by:
   "discovery": {
     "github": {
       "enabled": true,
-      "topic": "nekosunebot-package",
       "defaultLimit": 12,
       "sort": "stars",
       "order": "desc"
@@ -270,7 +269,9 @@ Plugin discovery is controlled by:
 }
 ```
 
-To make a third-party plugin discoverable, publish it as a GitHub repository and add the `nekosunebot-package` topic. The dashboard search lists matching repositories and installs through the same validated plugin install flow.
+The GitHub topic is intentionally not configurable. Pluxora always searches `pluxora-package`, even if a request or config file supplies a different topic.
+
+To make a third-party plugin discoverable, publish it as a GitHub repository and add the `pluxora-package` topic. Plugins published under that topic must follow the [Pluxora Plugin Publishing Terms](TERMS.md): no malware, token theft, IP grabbing, hidden data collection, abuse tooling, illegal content, or dangerous behavior. The dashboard search lists matching repositories and installs through the same validated plugin install flow.
 
 Plugins installed from GitHub keep their source URL in `config/plugins.json`. Update checks compare:
 
@@ -339,18 +340,22 @@ npm run check
 
 Plugins are Node.js code. The system isolates failures and plugin dependencies, but in-process JavaScript is not a hard security sandbox. Install only trusted plugins in production.
 
+Pluxora is released under the [Pluxora Restricted Source License](LICENSE). You may run it for legitimate use, but copying, redistributing, forking, stealing, rebranding, or using it for abuse, malware, IP grabbing, token theft, or other harmful activity is not allowed without permission.
+
+Community plugins keep their own licenses and rights. Always follow the license for each plugin, dependency, and third-party package.
+
 ## Docker
 
 Build locally:
 
 ```bash
-docker build -t publicdiscordbot .
+docker build -t pluxora .
 ```
 
 Run with env file:
 
 ```bash
-docker run --env-file .env -p 3000:3000 publicdiscordbot
+docker run --env-file .env -p 3000:3000 pluxora
 ```
 
 A GitHub Actions workflow is included at `.github/workflows/docker-image.yml` to validate Docker image builds on pushes and pull requests.

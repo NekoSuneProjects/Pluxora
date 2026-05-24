@@ -1,6 +1,5 @@
-const DEFAULT_TOPIC = 'nekosunebot-package';
+const DEFAULT_TOPIC = 'pluxora-package';
 const GITHUB_API_VERSION = '2022-11-28';
-const TOPIC_PATTERN = /^[a-z0-9][a-z0-9-]{0,49}$/;
 
 function clampLimit(value, fallback = 12) {
   const parsed = Number(value);
@@ -8,12 +7,8 @@ function clampLimit(value, fallback = 12) {
   return Math.max(1, Math.min(Math.floor(parsed), 50));
 }
 
-function normalizeTopic(topic) {
-  const normalized = String(topic || DEFAULT_TOPIC).trim().toLowerCase();
-  if (!TOPIC_PATTERN.test(normalized)) {
-    throw new Error(`Invalid GitHub topic "${topic}".`);
-  }
-  return normalized;
+function normalizeTopic() {
+  return DEFAULT_TOPIC;
 }
 
 function normalizeSort(sort) {
@@ -30,7 +25,7 @@ function githubHeaders() {
   const headers = {
     Accept: 'application/vnd.github+json',
     'X-GitHub-Api-Version': GITHUB_API_VERSION,
-    'User-Agent': 'ModularDiscordBot-plugin-discovery'
+    'User-Agent': 'Pluxora-plugin-discovery'
   };
 
   if (process.env.GITHUB_TOKEN) headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
@@ -273,9 +268,9 @@ async function listGithubRemotePlugins(source) {
   };
 }
 
-function buildRepositorySearchQuery({ topic, query }) {
+function buildRepositorySearchQuery({ query }) {
   const parts = [
-    `topic:${normalizeTopic(topic)}`,
+    `topic:${normalizeTopic()}`,
     'archived:false'
   ];
 
@@ -373,7 +368,7 @@ async function searchGithubPluginRepositories(options = {}) {
     : await Promise.all(repositories.map(enrichRepository));
 
   return {
-    topic: normalizeTopic(options.topic),
+    topic: normalizeTopic(),
     query,
     totalCount: payload.total_count || 0,
     incompleteResults: payload.incomplete_results === true,

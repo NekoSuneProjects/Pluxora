@@ -168,12 +168,12 @@ class DashboardServer {
           <head>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>ModularDiscordBot Login</title>
+            <title>Pluxora Login</title>
             <link rel="stylesheet" href="/style.css">
           </head>
           <body class="login-page">
             <main class="login-panel">
-              <h1>ModularDiscordBot</h1>
+              <h1>Pluxora</h1>
               <p>Sign in with Discord to manage plugins, settings, and logs.</p>
               <a class="button primary" href="/auth/discord">Sign in with Discord</a>
             </main>
@@ -279,7 +279,6 @@ class DashboardServer {
         }
 
         const result = await searchGithubPluginRepositories({
-          topic: req.query.topic || discoveryConfig.topic,
           query: req.query.query,
           limit: req.query.limit,
           defaultLimit: discoveryConfig.defaultLimit,

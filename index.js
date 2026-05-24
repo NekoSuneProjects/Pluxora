@@ -27,7 +27,7 @@ async function main() {
   await configManager.init();
 
   const logger = new Logger(configManager.getCore('logging', {}));
-  logger.info('Starting ModularDiscordBot');
+  logger.info('Starting Pluxora');
 
   const client = new Client({
     intents: resolveDiscordFlags(configManager.getCore('discord.intents', ['Guilds']), GatewayIntentBits, 'intent'),

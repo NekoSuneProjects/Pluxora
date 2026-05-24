@@ -126,19 +126,13 @@ function registerCoreCommands({ commandManager, pluginManager, configManager, re
 
   commandManager.registerCommand('core', {
     name: 'pluginsearch',
-    description: 'Find plugin repositories on GitHub by topic.',
+    description: 'Find Pluxora plugin repositories on GitHub.',
     ownerOnly: true,
     cooldownMs: 5000,
     options: [
       {
         name: 'query',
         description: 'Optional keywords to narrow results',
-        type: 'string',
-        required: false
-      },
-      {
-        name: 'topic',
-        description: 'GitHub topic to search',
         type: 'string',
         required: false
       }
@@ -148,7 +142,6 @@ function registerCoreCommands({ commandManager, pluginManager, configManager, re
       if (discoveryConfig.enabled === false) return ctx.reply('GitHub plugin discovery is disabled.');
 
       const result = await searchGithubPluginRepositories({
-        topic: ctx.options.topic || discoveryConfig.topic,
         query: ctx.options.query || ctx.args.join(' '),
         limit: 5,
         defaultLimit: discoveryConfig.defaultLimit,

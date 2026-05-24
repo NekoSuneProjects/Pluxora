@@ -338,6 +338,8 @@ From dashboard:
 - Per-plugin config edit
 - Enable/disable/reload/update/uninstall
 
+Publishing under the `pluxora-package` GitHub topic means your plugin must follow `TERMS.md`. Do not publish plugins that contain malware, token theft, IP grabbing, hidden data collection, abuse tooling, illegal content, or dangerous behavior. Community plugins keep their own licenses, and users must follow those licenses.
+
 ---
 
 ## 11) Best practices
